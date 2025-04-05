@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction List | Accounting App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <header class="bg-blue-600 text-white p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Transaction List</h1>
+            <nav>
+                <ul class="flex space-x-4">
+                    <li><a href="index.html" class="hover:underline"><i class="fas fa-arrow-left mr-1"></i> Back</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 page-transition">
+        <div class="bg-white p-4 rounded-lg shadow-md mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label class="form-label">Date Range</label>
+                    <select id="date-range" class="form-input">
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Category</label>
+                    <select id="category-filter" class="form-input">
+                        <option value="all">All Categories</option>
+                        <option value="food">Food</option>
+                        <option value="transport">Transport</option>
+                        <option value="housing">Housing</option>
+                        <option value="utilities">Utilities</option>
+                        <option value="entertainment">Entertainment</option>
+                        <option value="salary">Salary</option>
+                        <option value="freelance">Freelance</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Type</label>
+                    <select id="type-filter" class="form-input">
+                        <option value="all">All Types</option>
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Search</label>
+                    <input type="text" id="search" class="form-input" placeholder="Search descriptions...">
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg shadow-md overflow-x-auto">
+            <table class="transaction-table w-full">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="transactions-list">
+                    <!-- Transactions will be inserted here by JavaScript -->
+                </tbody>
+            </table>
+            <div class="flex justify-between items-center mt-4">
+                <div class="text-sm text-gray-500" id="transaction-count">Showing 0 transactions</div>
+                <div class="flex space-x-2">
+                    <button id="prev-page" class="px-3 py-1 bg-gray-200 rounded disabled:opacity-50" disabled>Previous</button>
+                    <span id="page-info" class="px-3 py-1">Page 1 of 1</span>
+                    <button id="next-page" class="px-3 py-1 bg-gray-200 rounded disabled:opacity-50" disabled>Next</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+        // Current page state
+        let currentPage = 1;
+        const transactionsPerPage = 10;
+        let filteredTransactions = [];
+
+        // DOM Elements
+        const transactionsListEl = document.getElementById('transactions-list');
+        const transactionCountEl = document.getElementById('transaction-count');
+        const prevPageBtn = document.getElementById('prev-page');
+        const nextPageBtn = document.getElementById('next-page');
+        const pageInfoEl = document.getElementById('page-info');
+
+        // Filter elements
+        const dateRangeEl = document.getElementById('date-range');
+        const categoryFilterEl = document.getElementById('category-filter');
+        const typeFilterEl = document.getElementById('type-filter');
+        const searchEl = document.getElementById('search');
+
+        // Initialize the page
+        function initListPage() {
+            renderTransactions();
+            setupEventListeners();
+        }
+
+        // Render transactions based on filters and pagination
+        function renderTransactions() {
+            // Get all transactions
+            const allTransactions = window.app.getTransactions();
+            
+            // Apply filters
+            filteredTransactions = allTransactions.filter(transaction => {
+                // Date range filter
+                const transactionDate = new Date(transaction.date);
+                const now = new Date();
+                
+                if (dateRangeEl.value === 'today') {
+                    return transactionDate.toDateString() === now.toDateString();
+                } else if (dateRangeEl.value === 'week') {
+                    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+                    return transactionDate >= startOfWeek;
+                } else if (dateRangeEl.value === 'month') {
+                    return transactionDate.getMonth() === now.getMonth() && 
+                           transactionDate.getFullYear() === now.getFullYear();
+                } else if (dateRangeEl.value === 'year') {
+                    return transactionDate.getFullYear() === now.getFullYear();
+                }
+                
+                // Category filter
+                if (categoryFilterEl.value !== 'all' && transaction.category !== categoryFilterEl.value) {
+                    return false;
+                }
+                
+                // Type filter
+                if (typeFilterEl.value !== 'all' && transaction.type !== typeFilterEl.value) {
+                    return false;
+                }
+                
+                // Search filter
+                if (searchEl.value && 
+                    !transaction.description.toLowerCase().includes(searchEl.value.toLowerCase())) {
+                    return false;
+                }
+                
+                return true;
+            });
+
+            // Sort by date (newest first)
+            filteredTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            // Update count
+            transactionCountEl.textContent = `Showing ${filteredTransactions.length} transactions`;
+
+            // Pagination
+            const totalPages = Math.ceil(filteredTransactions.length / transactionsPerPage);
+            const startIdx = (currentPage - 1) * transactionsPerPage;
+            const endIdx = startIdx + transactionsPerPage;
+            const paginatedTransactions = filteredTransactions.slice(startIdx, endIdx);
+
+            // Update pagination controls
+            pageInfoEl.textContent = `Page ${currentPage} of ${totalPages || 1}`;
+            prevPageBtn.disabled = currentPage === 1;
+            nextPageBtn.disabled = currentPage === totalPages || totalPages === 0;
+
+            // Clear existing transactions
+            transactionsListEl.innerHTML = '';
+
+            // Render each transaction
+            paginatedTransactions.forEach(transaction => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                
+                const typeClass = transaction.type === 'income' ? 'text-green-600' : 'text-red-600';
+                const typeIcon = transaction.type === 'income' ? 
+                    '<i class="fas fa-arrow-down mr-1"></i>' : 
+                    '<i class="fas fa-arrow-up mr-1"></i>';
+
+                row.innerHTML = `
+                    <td>${new Date(transaction.date).toLocaleDateString()}</td>
+                    <td class="capitalize">${transaction.category}</td>
+                    <td class="capitalize">${transaction.type}</td>
+                    <td class="${typeClass}">${typeIcon}${window.app.formatCurrency(transaction.amount)}</td>
+                    <td>${transaction.description || '-'}</td>
+                    <td>
+                        <button onclick="deleteTransaction(${transaction.id})" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                transactionsListEl.appendChild(row);
+            });
+        }
+
+        // Delete transaction
+        function deleteTransaction(id) {
+            if (confirm('Are you sure you want to delete this transaction?')) {
+                window.app.deleteTransaction(id);
+                renderTransactions();
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Filter controls
+            dateRangeEl.addEventListener('change', () => {
+                currentPage = 1;
+                renderTransactions();
+            });
+            
+            categoryFilterEl.addEventListener('change', () => {
+                currentPage = 1;
+                renderTransactions();
+            });
+            
+            typeFilterEl.addEventListener('change', () => {
+                currentPage = 1;
+                renderTransactions();
+            });
+            
+            searchEl.addEventListener('input', () => {
+                currentPage = 1;
+                renderTransactions();
+            });
+
+            // Pagination controls
+            prevPageBtn.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderTransactions();
+                }
+            });
+            
+            nextPageBtn.addEventListener('click', () => {
+                const totalPages = Math.ceil(filteredTransactions.length / transactionsPerPage);
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderTransactions();
+                }
+            });
+        }
+
+        // Initialize the page when loaded
+        document.addEventListener('DOMContentLoaded', initListPage);
+    </script>
+</body>
+</html>
